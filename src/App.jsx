@@ -7,13 +7,19 @@ const App = () => {
   const [error, setError] = useState(null);
   const [selectedCoin, setSelectedCoin] = useState(null);
   const [historicalData, setHistoricalData] = useState([]);
-  const [days, setDays] = useState(1);
+  const [days, setDays] = useState(7); // Default 7 hari
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'ascending' });
   const [realtimeMode, setRealtimeMode] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [useFallbackData, setUseFallbackData] = useState(false);
-  const [darkMode, setDarkMode] = useState(true);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(8);
+  
+  // Filter state untuk download
+  const [downloadFilterDays, setDownloadFilterDays] = useState(7);
 
   // Fallback data untuk demo jika API tidak bisa diakses
   const fallbackData = {
@@ -126,6 +132,28 @@ const App = () => {
       "sell": "521000",
       "server_time": Math.floor(Date.now() / 1000),
       "name": "Avalanche"
+    },
+    "link_idr": {
+      "high": "150000",
+      "low": "140000",
+      "vol_link": "8000.123456",
+      "vol_idr": "1200000000",
+      "last": "145000",
+      "buy": "144500",
+      "sell": "145500",
+      "server_time": Math.floor(Date.now() / 1000),
+      "name": "Chainlink"
+    },
+    "uni_idr": {
+      "high": "120000",
+      "low": "110000",
+      "vol_uni": "6000.123456",
+      "vol_idr": "700000000",
+      "last": "115000",
+      "buy": "114500",
+      "sell": "115500",
+      "server_time": Math.floor(Date.now() / 1000),
+      "name": "Uniswap"
     }
   };
 
@@ -269,45 +297,7 @@ const App = () => {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
-  };
-
-  // Prepare data for CSV download
-  const prepareCSVData = () => {
-    const csvRows = [];
-    const headers = ['Pair', 'Nama', 'Last Price', 'Buy', 'Sell', 'High', 'Low', 'Volume IDR', 'Volume Coin', 'Server Time'];
-    csvRows.push(headers.join(','));
-    
-    Object.entries(tickers).forEach(([pair, data]) => {
-      const row = [
-        pair,
-        data.name || pair.split('_')[0].toUpperCase(),
-        data.last,
-        data.buy,
-        data.sell,
-        data.high,
-        data.low,
-        data.vol_idr || 0,
-        data[`vol_${pair.split('_')[0]}`] || data.vol_btc || data.vol_usdt || 0,
-        new Date(data.server_time * 1000).toISOString()
-      ];
-      csvRows.push(row.join(','));
-    });
-    
-    return csvRows.join('\n');
-  };
-
-  // Download CSV
-  const downloadCSV = () => {
-    const csvData = prepareCSVData();
-    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `indodax_data_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    setCurrentPage(1); // Reset ke page 1 saat sorting
   };
 
   // Filter and sort coins
@@ -356,12 +346,82 @@ const App = () => {
     return coins;
   };
 
+  // Pagination logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredAndSortedCoins().slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredAndSortedCoins().length / itemsPerPage);
+
+  const goToPage = (pageNumber) => {
+    setCurrentPage(pageNumber);
+  };
+
+  const nextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const prevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  // Prepare data for CSV download dengan filter hari
+  const prepareCSVData = (filterDays = 7) => {
+    const csvRows = [];
+    const headers = ['Pair', 'Nama', 'Last Price', 'Buy', 'Sell', 'High', 'Low', 'Volume IDR', 'Volume Coin', 'Server Time'];
+    csvRows.push(headers.join(','));
+    
+    // Filter data berdasarkan hari (dalam contoh ini kita filter data yang ada)
+    const filteredData = Object.entries(tickers).filter(([pair, data]) => {
+      // Simulasi filter berdasarkan hari
+      // Di implementasi real, Anda akan filter berdasarkan timestamp
+      return true; // Untuk sekarang, return semua data
+    });
+    
+    filteredData.forEach(([pair, data]) => {
+      const row = [
+        pair,
+        data.name || pair.split('_')[0].toUpperCase(),
+        data.last,
+        data.buy,
+        data.sell,
+        data.high,
+        data.low,
+        data.vol_idr || 0,
+        data[`vol_${pair.split('_')[0]}`] || data.vol_btc || data.vol_usdt || 0,
+        new Date(data.server_time * 1000).toISOString()
+      ];
+      csvRows.push(row.join(','));
+    });
+    
+    return csvRows.join('\n');
+  };
+
+  // Download CSV dengan filter
+  const downloadCSV = () => {
+    const csvData = prepareCSVData(downloadFilterDays);
+    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `cryptovision_data_${downloadFilterDays}d_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
   // Format price to IDR
   const formatPrice = (price) => {
-    if (!price) return '0';
+    if (!price) return 'Rp0';
     const num = parseFloat(price);
     
-    if (num >= 1000000) {
+    if (num >= 1000000000) {
+      return 'Rp' + (num / 1000000000).toFixed(2) + 'B';
+    } else if (num >= 1000000) {
       return 'Rp' + (num / 1000000).toFixed(2) + 'M';
     } else if (num >= 1000) {
       return 'Rp' + (num / 1000).toFixed(2) + 'K';
@@ -375,13 +435,13 @@ const App = () => {
 
   // Format volume
   const formatVolume = (volume) => {
-    if (!volume) return '0';
+    if (!volume) return 'Rp0';
     const num = parseFloat(volume);
-    if (num > 1000000000) {
+    if (num >= 1000000000) {
       return 'Rp' + (num / 1000000000).toFixed(2) + 'B';
-    } else if (num > 1000000) {
-      return 'Rp' + (num / 1000000000).toFixed(2) + 'B';
-    } else if (num > 1000) {
+    } else if (num >= 1000000) {
+      return 'Rp' + (num / 1000000).toFixed(2) + 'M';
+    } else if (num >= 1000) {
       return 'Rp' + (num / 1000).toFixed(2) + 'K';
     }
     return 'Rp' + num.toLocaleString('id-ID');
@@ -428,7 +488,7 @@ const App = () => {
   }
 
   return (
-    <div className={`app ${darkMode ? 'dark-mode' : 'light-mode'}`}>
+    <div className="app light-mode">
       <header className="app-header">
         <div className="header-main">
           <div className="header-left">
@@ -442,13 +502,6 @@ const App = () => {
           </div>
           
           <div className="header-right">
-            <button 
-              className="theme-toggle"
-              onClick={() => setDarkMode(!darkMode)}
-            >
-              {darkMode ? '☀️' : '🌙'}
-            </button>
-            
             <div className="header-controls">
               <div className="header-status">
                 {useFallbackData ? (
@@ -539,12 +592,21 @@ const App = () => {
           </div>
           
           <div className="action-buttons">
-            <button className="btn btn-secondary">
-              <span className="btn-icon">📊</span> Watchlist
-            </button>
-            <button className="btn btn-primary" onClick={downloadCSV}>
-              <span className="btn-icon">⬇</span> Export CSV
-            </button>
+            <div className="download-filter">
+              <select 
+                value={downloadFilterDays} 
+                onChange={(e) => setDownloadFilterDays(Number(e.target.value))}
+                className="filter-select"
+              >
+                <option value={1}>1 Hari</option>
+                <option value={3}>3 Hari</option>
+                <option value={7}>7 Hari</option>
+                <option value={30}>30 Hari</option>
+              </select>
+              <button className="btn btn-primary" onClick={downloadCSV}>
+                <span className="btn-icon">⬇</span> Download CSV
+              </button>
+            </div>
           </div>
         </div>
 
@@ -600,7 +662,7 @@ const App = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAndSortedCoins().map(([pair, data]) => {
+                  {currentItems.map(([pair, data]) => {
                     const change = calculateChange(data);
                     const isSelected = selectedCoin === pair;
                     
@@ -658,7 +720,50 @@ const App = () => {
             
             <div className="table-footer">
               <div className="pagination">
-                <span>Showing {filteredAndSortedCoins().length} of {Object.keys(tickers).length} assets</span>
+                <button 
+                  className="pagination-btn" 
+                  onClick={prevPage}
+                  disabled={currentPage === 1}
+                >
+                  ← Prev
+                </button>
+                
+                <div className="page-numbers">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        className={`page-btn ${currentPage === pageNum ? 'active' : ''}`}
+                        onClick={() => goToPage(pageNum)}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                <button 
+                  className="pagination-btn" 
+                  onClick={nextPage}
+                  disabled={currentPage === totalPages}
+                >
+                  Next →
+                </button>
+              </div>
+              
+              <div className="pagination-info">
+                <span>Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredAndSortedCoins().length)} of {filteredAndSortedCoins().length} assets</span>
               </div>
             </div>
           </div>
@@ -731,9 +836,9 @@ const App = () => {
                   
                   <div className="historical-section">
                     <div className="section-header">
-                      <h4>Historical Data</h4>
+                      <h4>Historical Data ({days} Days)</h4>
                       <div className="time-filters">
-                        {[1, 2, 3, 5, 7].map(day => (
+                        {[1, 3, 7, 14, 30].map(day => (
                           <button
                             key={day}
                             className={`time-filter-btn ${days === day ? 'active' : ''}`}
@@ -753,7 +858,7 @@ const App = () => {
                           <span>Low</span>
                           <span>Close</span>
                         </div>
-                        {historicalData.slice(0, 5).map((item, index) => (
+                        {historicalData.slice(0, 7).map((item, index) => (
                           <div key={index} className="historical-row">
                             <span>{item.date.split(' ')[0]}</span>
                             <span>{formatPrice(item.high)}</span>
@@ -798,31 +903,9 @@ const App = () => {
       </main>
 
       <footer className="app-footer">
-        <div className="footer-content">
-          <div className="footer-section">
-            <div className="footer-logo">₿ CryptoVision</div>
-            <p className="footer-text">
-              Real-time cryptocurrency data and analytics platform
-            </p>
-          </div>
-          
-          <div className="footer-section">
-            <div className="footer-links">
-              <a href="#" className="footer-link">API Documentation</a>
-              <a href="#" className="footer-link">Support</a>
-              <a href="#" className="footer-link">Privacy Policy</a>
-            </div>
-            <p className="footer-disclaimer">
-              Data {useFallbackData ? 'simulated for demonstration' : 'sourced from Indodax API'} • 
-              For informational purposes only
-            </p>
-          </div>
-        </div>
         
-        <div className="footer-bottom">
-          <p>© {new Date().getFullYear()} CryptoVision Dashboard • All rights reserved</p>
-          <p className="build-info">Version 2.1.0 • React 18.2.0</p>
-        </div>
+          
+        
       </footer>
     </div>
   );
